@@ -15,6 +15,8 @@ const EXPECTED_TOOLS = [
   'search_cards',
   'get_comments',
   'add_comment',
+  'update_board_context',
+  'update_column_agents',
 ];
 
 let client: Client;
@@ -38,6 +40,54 @@ describe('server registration', () => {
 
   it('provides server instructions', async () => {
     expect(client.getInstructions()).toBeTruthy();
+  });
+
+  it('tells agents to read the board context and repository', async () => {
+    expect(client.getInstructions()).toMatch(/`context`.*`repository`/);
+  });
+
+  it('tells agents to pull inbox cards into the first active column', async () => {
+    expect(client.getInstructions()).toMatch(/first active column/i);
+  });
+
+  it('tells agents to leave the inbox and terminal columns alone', async () => {
+    expect(client.getInstructions()).toMatch(/never process cards in the first column/i);
+    expect(client.getInstructions()).toMatch(/terminal/i);
+  });
+
+  it('tells each column agent to assign itself as agent:<identifier>', async () => {
+    expect(client.getInstructions()).toMatch(/`agent:<identifier>`/);
+  });
+
+  it('lets agents in the same column work on a card in parallel', async () => {
+    expect(client.getInstructions()).toMatch(/parallel/i);
+  });
+
+  it('tells agents never to work on cards assigned to a person', async () => {
+    expect(client.getInstructions()).toMatch(/never work on a card assigned to a person/i);
+  });
+
+  it('tells agents to judge whether they have finished a card from the comments and their times', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/judge from the card's comments/i);
+    expect(instructions).not.toMatch(/stageEnteredAt/);
+  });
+
+  it('tells agents to prompt the user about cards that have stalled', async () => {
+    expect(client.getInstructions()).toMatch(/stalled/i);
+  });
+
+  it('tells agents to block in place instead of using an awaiting input column', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/leave the card in its column/i);
+    expect(instructions).not.toMatch(/Awaiting Input/);
+  });
+
+  it('describes how triage handles each kind of inbox card', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/### Triage/);
+    expect(instructions).toMatch(/ambiguous/i);
+    expect(instructions).toMatch(/empty/i);
   });
 });
 
@@ -335,6 +385,22 @@ describe('add_comment', () => {
     );
   });
 
+  it('attributes the comment to an agent when agentId is provided', async () => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 201 }));
+
+    await client.callTool({
+      name: 'add_comment',
+      arguments: { boardId: 'b1', cardId: 'card1', text: 'Approved', agentId: 'swift-1' },
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/cards/card1/comments',
+      expect.objectContaining({
+        body: JSON.stringify({ text: 'Approved', agentId: 'swift-1' }),
+      }),
+    );
+  });
+
   it('omits mentions and options when not provided', async () => {
     fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 201 }));
 
@@ -360,5 +426,68 @@ describe('error handling', () => {
     const result = await client.callTool({ name: 'list_boards', arguments: {} });
 
     expect(result.isError).toBe(true);
+  });
+});
+
+describe('update_board_context', () => {
+  it('calls PUT /api/boards/:id/context with context and repository', async () => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+
+    await client.callTool({
+      name: 'update_board_context',
+      arguments: { boardId: 'b1', context: 'Swift 6 app', repository: 'git@github.com:me/app.git' },
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/context',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ context: 'Swift 6 app', repository: 'git@github.com:me/app.git' }),
+      }),
+    );
+  });
+
+  it('only sends the fields that were provided', async () => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+
+    await client.callTool({
+      name: 'update_board_context',
+      arguments: { boardId: 'b1', repository: 'repo-url' },
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/context',
+      expect.objectContaining({ body: JSON.stringify({ repository: 'repo-url' }) }),
+    );
+  });
+});
+
+describe('update_column_agents', () => {
+  it('calls PUT /api/boards/:id/columns/:colId/agents with the full agents list', async () => {
+    const agents = [
+      { identifier: 'a1', name: 'Reviewer', instructions: 'Review it', enabled: false },
+      { name: 'Tester', instructions: 'Test it' },
+    ];
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(agents), { status: 200 }));
+
+    await client.callTool({
+      name: 'update_column_agents',
+      arguments: { boardId: 'b1', columnId: 'c1', agents },
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1/agents',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ agents }),
+      }),
+    );
+  });
+
+  it('explains that the list replaces the existing agents', async () => {
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === 'update_column_agents');
+
+    expect(tool.description).toMatch(/replaces/i);
   });
 });

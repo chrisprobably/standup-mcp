@@ -92,11 +92,11 @@ export function createServer(config: ServerConfig): McpServer {
   });
 
   server.registerTool('assign_card', {
-    description: 'Assign a user or agent to a card. Adds to existing assignees without duplicates.',
+    description: 'Assign a user or agent to a card. Adds to existing assignees without duplicates. Column agents are assigned as agent:<identifier>.',
     inputSchema: z.object({
       boardId: z.string().describe('The board identifier'),
       cardId: z.string().describe('The card identifier'),
-      assignee: z.string().describe('Username to assign'),
+      assignee: z.string().describe('Username, or agent:<identifier> for a column agent'),
     }),
   }, async ({ boardId, cardId, assignee }) => {
     const resolved = await resolveCard(boardId, cardId);
@@ -111,7 +111,7 @@ export function createServer(config: ServerConfig): McpServer {
     inputSchema: z.object({
       boardId: z.string().describe('The board identifier'),
       cardId: z.string().describe('The card identifier'),
-      assignee: z.string().describe('Username to remove'),
+      assignee: z.string().describe('Username, or agent:<identifier> for a column agent, to remove'),
     }),
   }, async ({ boardId, cardId, assignee }) => {
     const resolved = await resolveCard(boardId, cardId);
@@ -148,9 +148,37 @@ export function createServer(config: ServerConfig): McpServer {
       text: z.string().describe('Comment text (supports markdown)'),
       mentions: z.array(z.string()).optional().describe('Usernames to @mention'),
       options: z.array(z.string()).optional().describe('Clickable option buttons for structured questions'),
+      agentId: z.string().optional().describe('Identifier of the column agent posting the comment, so it is attributed to that agent'),
     }),
-  }, async ({ boardId, cardId, text, mentions, options }) => {
-    return jsonResult(await client.addComment(boardId, cardId, text, mentions, options));
+  }, async ({ boardId, cardId, text, mentions, options, agentId }) => {
+    return jsonResult(await client.addComment(boardId, cardId, text, mentions, options, agentId));
+  });
+
+  server.registerTool('update_board_context', {
+    description: "Set a board's project context (markdown) and/or repository URL. Omitted fields are left unchanged.",
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+      context: z.string().optional().describe('Project context in markdown: stack, constraints, conventions'),
+      repository: z.string().optional().describe('Git URL of the project repository'),
+    }),
+  }, async ({ boardId, context, repository }) => {
+    return jsonResult(await client.updateBoardContext(boardId, context, repository));
+  });
+
+  server.registerTool('update_column_agents', {
+    description: "Set the agents for a column. The list replaces the column's existing agents, so to change one agent send the full list from get_board with that agent edited. Keep each existing agent's identifier so its assignments and comments stay linked.",
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+      columnId: z.string().describe('The column identifier'),
+      agents: z.array(z.object({
+        identifier: z.string().optional().describe('Existing agent identifier; omit for a new agent'),
+        name: z.string().describe('Agent name'),
+        instructions: z.string().optional().describe('Markdown instructions for the agent'),
+        enabled: z.boolean().optional().describe('Whether the agent is active (default true)'),
+      })).describe('The complete list of agents for the column (max 10)'),
+    }),
+  }, async ({ boardId, columnId, agents }) => {
+    return jsonResult(await client.updateColumnAgents(boardId, columnId, agents));
   });
 
   return server;

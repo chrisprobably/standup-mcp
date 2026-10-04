@@ -58,11 +58,13 @@ You should see your boards returned. If you get an authentication error, double-
 | `update_card` | Update card text |
 | `delete_card` | Delete a card |
 | `move_card` | Move a card to a different column |
-| `assign_card` | Assign a user to a card |
-| `unassign_card` | Remove a user from a card |
+| `assign_card` | Assign a user, or a column agent as `agent:<identifier>`, to a card |
+| `unassign_card` | Remove a user or column agent from a card |
 | `search_cards` | Search for cards across all boards by text content |
 | `get_comments` | Get all comments on a card |
-| `add_comment` | Post a comment on a card (supports markdown, @mentions, and clickable option buttons) |
+| `add_comment` | Post a comment on a card (supports markdown, @mentions, clickable option buttons, and attribution to a column agent via `agentId`) |
+| `update_board_context` | Set a board's project context and/or repository URL |
+| `update_column_agents` | Replace a column's agents (send the full list) |
 
 ## Example usage
 

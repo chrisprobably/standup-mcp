@@ -84,13 +84,31 @@ export class StandupClient {
     return this.request(`/api/boards/${boardId}/cards/${cardId}/comments`);
   }
 
-  async addComment(boardId: string, cardId: string, text: string, mentions?: string[], options?: string[]): Promise<unknown> {
+  async addComment(boardId: string, cardId: string, text: string, mentions?: string[], options?: string[], agentId?: string): Promise<unknown> {
     const body: Record<string, unknown> = { text };
     if (mentions?.length) body.mentions = mentions;
     if (options?.length) body.options = options;
+    if (agentId) body.agentId = agentId;
     return this.request(`/api/boards/${boardId}/cards/${cardId}/comments`, {
       method: 'POST',
       body: JSON.stringify(body),
+    });
+  }
+
+  async updateBoardContext(boardId: string, context?: string, repository?: string): Promise<unknown> {
+    const body: Record<string, unknown> = {};
+    if (context !== undefined) body.context = context;
+    if (repository !== undefined) body.repository = repository;
+    return this.request(`/api/boards/${boardId}/context`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async updateColumnAgents(boardId: string, columnId: string, agents: ColumnAgentInput[]): Promise<unknown> {
+    return this.request(`/api/boards/${boardId}/columns/${columnId}/agents`, {
+      method: 'PUT',
+      body: JSON.stringify({ agents }),
     });
   }
 
@@ -131,4 +149,11 @@ export interface Column {
 export interface Board {
   identifier: string;
   columns: Column[];
+}
+
+export interface ColumnAgentInput {
+  identifier?: string;
+  name: string;
+  instructions?: string;
+  enabled?: boolean;
 }
