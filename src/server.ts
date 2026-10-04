@@ -2,6 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { StandupClient } from './standupClient.js';
 import { INSTRUCTIONS } from './instructions.js';
+import { HandedBackTracker } from './handedBackTracker.js';
+import { mergeCardWork } from './mergeCardWork.js';
 
 export interface ServerConfig {
   baseUrl: string;
@@ -16,6 +18,19 @@ export function createServer(config: ServerConfig): McpServer {
     { name: 'standup', version: '1.0.0' },
     { instructions: INSTRUCTIONS },
   );
+
+  const handedBack = new HandedBackTracker(client);
+
+  async function respond(boardId: string, data: unknown) {
+    const result = jsonResult(data);
+    const notice = await handedBack.noticeFor(boardId);
+    return notice ? { content: [...result.content, { type: 'text' as const, text: notice }] } : result;
+  }
+
+  async function respondAfterChange(boardId: string, data: unknown) {
+    handedBack.forget(boardId);
+    return respond(boardId, data);
+  }
 
   async function resolveCard(boardId: string, cardId: string) {
     const board = await client.getBoard(boardId);
@@ -38,7 +53,9 @@ export function createServer(config: ServerConfig): McpServer {
       boardId: z.string().describe('The board identifier'),
     }),
   }, async ({ boardId }) => {
-    return jsonResult(await client.getBoard(boardId));
+    const board = await client.getBoard(boardId);
+    handedBack.remember(board);
+    return respond(boardId, board);
   });
 
   server.registerTool('create_card', {
@@ -49,7 +66,7 @@ export function createServer(config: ServerConfig): McpServer {
       text: z.string().describe('The card text'),
     }),
   }, async ({ boardId, columnId, text }) => {
-    return jsonResult(await client.createCard(boardId, columnId, text));
+    return respondAfterChange(boardId, await client.createCard(boardId, columnId, text));
   });
 
   server.registerTool('update_card', {
@@ -62,7 +79,7 @@ export function createServer(config: ServerConfig): McpServer {
   }, async ({ boardId, cardId, text }) => {
     const resolved = await resolveCard(boardId, cardId);
     if (!resolved) return cardNotFound(boardId, cardId);
-    return jsonResult(await client.updateCard(boardId, resolved.column.identifier, cardId, text));
+    return respondAfterChange(boardId, await client.updateCard(boardId, resolved.column.identifier, cardId, text));
   });
 
   server.registerTool('delete_card', {
@@ -74,7 +91,7 @@ export function createServer(config: ServerConfig): McpServer {
   }, async ({ boardId, cardId }) => {
     const resolved = await resolveCard(boardId, cardId);
     if (!resolved) return cardNotFound(boardId, cardId);
-    return jsonResult(await client.deleteCard(boardId, resolved.column.identifier, cardId));
+    return respondAfterChange(boardId, await client.deleteCard(boardId, resolved.column.identifier, cardId));
   });
 
   server.registerTool('move_card', {
@@ -88,7 +105,7 @@ export function createServer(config: ServerConfig): McpServer {
   }, async ({ boardId, cardId, toColumnId, index }) => {
     const resolved = await resolveCard(boardId, cardId);
     if (!resolved) return cardNotFound(boardId, cardId);
-    return jsonResult(await client.moveCard(boardId, resolved.column.identifier, cardId, toColumnId, index));
+    return respondAfterChange(boardId, await client.moveCard(boardId, resolved.column.identifier, cardId, toColumnId, index));
   });
 
   server.registerTool('assign_card', {
@@ -103,7 +120,7 @@ export function createServer(config: ServerConfig): McpServer {
     if (!resolved) return cardNotFound(boardId, cardId);
     const current = resolved.card.assignees ?? [];
     const updated = current.includes(assignee) ? current : [...current, assignee];
-    return jsonResult(await client.setAssignees(boardId, resolved.column.identifier, cardId, updated));
+    return respondAfterChange(boardId, await client.setAssignees(boardId, resolved.column.identifier, cardId, updated));
   });
 
   server.registerTool('unassign_card', {
@@ -118,7 +135,7 @@ export function createServer(config: ServerConfig): McpServer {
     if (!resolved) return cardNotFound(boardId, cardId);
     const current = resolved.card.assignees ?? [];
     const updated = current.filter(a => a !== assignee);
-    return jsonResult(await client.setAssignees(boardId, resolved.column.identifier, cardId, updated));
+    return respondAfterChange(boardId, await client.setAssignees(boardId, resolved.column.identifier, cardId, updated));
   });
 
   server.registerTool('search_cards', {
@@ -137,7 +154,7 @@ export function createServer(config: ServerConfig): McpServer {
       cardId: z.string().describe('The card identifier'),
     }),
   }, async ({ boardId, cardId }) => {
-    return jsonResult(await client.getComments(boardId, cardId));
+    return respond(boardId, await client.getComments(boardId, cardId));
   });
 
   server.registerTool('add_comment', {
@@ -151,7 +168,7 @@ export function createServer(config: ServerConfig): McpServer {
       agentId: z.string().optional().describe('Identifier of the column agent posting the comment, so it is attributed to that agent'),
     }),
   }, async ({ boardId, cardId, text, mentions, options, agentId }) => {
-    return jsonResult(await client.addComment(boardId, cardId, text, mentions, options, agentId));
+    return respondAfterChange(boardId, await client.addComment(boardId, cardId, text, mentions, options, agentId));
   });
 
   server.registerTool('update_board_context', {
@@ -162,7 +179,7 @@ export function createServer(config: ServerConfig): McpServer {
       repository: z.string().optional().describe('Git URL of the project repository'),
     }),
   }, async ({ boardId, context, repository }) => {
-    return jsonResult(await client.updateBoardContext(boardId, context, repository));
+    return respondAfterChange(boardId, await client.updateBoardContext(boardId, context, repository));
   });
 
   server.registerTool('update_column_agents', {
@@ -178,7 +195,28 @@ export function createServer(config: ServerConfig): McpServer {
       })).describe('The complete list of agents for the column (max 10)'),
     }),
   }, async ({ boardId, columnId, agents }) => {
-    return jsonResult(await client.updateColumnAgents(boardId, columnId, agents));
+    return respondAfterChange(boardId, await client.updateColumnAgents(boardId, columnId, agents));
+  });
+
+  server.registerTool('set_card_work', {
+    description: 'Record where the work for a card lives: repository path, branch, commits, whether it was pushed and the pull request link. Merges with what is already recorded: new commits are added and fields you leave out are kept.',
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+      cardId: z.string().describe('The card identifier'),
+      branch: z.string().optional().describe('Branch the work is on (required the first time)'),
+      commits: z.array(z.string()).optional().describe('Commit SHAs to add'),
+      repositoryPath: z.string().optional().describe('Absolute path of the local clone'),
+      pushed: z.boolean().optional().describe('Whether the branch has been pushed'),
+      pullRequestUrl: z.string().optional().describe('Link to the pull request, if one was opened'),
+    }),
+  }, async ({ boardId, cardId, ...update }) => {
+    const resolved = await resolveCard(boardId, cardId);
+    if (!resolved) return cardNotFound(boardId, cardId);
+    const work = mergeCardWork(resolved.card.work, update);
+    if (!work) {
+      return { content: [{ type: 'text' as const, text: 'branch is required the first time work is recorded on a card' }], isError: true };
+    }
+    return respondAfterChange(boardId, await client.setCardWork(boardId, cardId, work));
   });
 
   return server;

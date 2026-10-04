@@ -112,6 +112,13 @@ export class StandupClient {
     });
   }
 
+  async setCardWork(boardId: string, cardId: string, work: CardWork): Promise<unknown> {
+    return this.request(`/api/boards/${boardId}/cards/${cardId}/work`, {
+      method: 'PUT',
+      body: JSON.stringify(work),
+    });
+  }
+
   async searchCards(query: string): Promise<unknown> {
     return this.request(`/api/boards/search?q=${encodeURIComponent(query)}`);
   }
@@ -134,16 +141,39 @@ export class StandupClient {
   }
 }
 
+export interface CardComment {
+  identifier: string;
+  author: string;
+  text: string;
+  agentId?: string;
+}
+
+export interface CardWork {
+  branch: string;
+  commits: string[];
+  pushed: boolean;
+  repositoryPath?: string;
+  pullRequestUrl?: string;
+}
+
 export interface Card {
   identifier: string;
   text: string;
   assignees?: string[];
+  comments?: CardComment[];
+  work?: CardWork;
+}
+
+export interface ColumnAgent {
+  identifier: string;
+  name: string;
 }
 
 export interface Column {
   identifier: string;
   name: string;
   cards?: Card[];
+  agents?: ColumnAgent[];
 }
 
 export interface Board {

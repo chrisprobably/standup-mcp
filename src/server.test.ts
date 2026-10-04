@@ -17,6 +17,7 @@ const EXPECTED_TOOLS = [
   'add_comment',
   'update_board_context',
   'update_column_agents',
+  'set_card_work',
 ];
 
 let client: Client;
@@ -89,11 +90,10 @@ describe('server registration', () => {
     expect(instructions).toMatch(/do not push/i);
   });
 
-  it('tells agents to say where the work is when they change code', async () => {
+  it('tells agents to record the repository path, branch and commits on the card', async () => {
     const instructions = client.getInstructions();
-    expect(instructions).toMatch(/\*\*Where:\*\*/);
-    expect(instructions).toMatch(/commit/i);
-    expect(instructions).toMatch(/branch/i);
+    expect(instructions).toMatch(/absolute repository path, branch and new commit SHA/);
+    expect(instructions).not.toMatch(/\*\*Where:\*\*/);
   });
 
   it('tells reviewers to assign themselves even when they only approve', async () => {
@@ -102,6 +102,26 @@ describe('server registration', () => {
 
   it('explains that standup hands a card back when the person answers', async () => {
     expect(client.getInstructions()).toMatch(/hands the card back/i);
+  });
+
+  it('tells agents to resume cards handed back to them before other work', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/1\. Cards assigned to one of your agents where a person has replied/);
+    expect(instructions).toMatch(/2\. Unfinished cards in your agents' columns/);
+  });
+
+  it('does not treat a card assigned to your own agent as off limits', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).not.toMatch(/is not already assigned to it/);
+    expect(instructions).toMatch(/assigned to one of your agents means it is yours to continue/i);
+  });
+
+  it('tells agents to act on the handed-back note in tool responses', async () => {
+    expect(client.getInstructions()).toMatch(/"Handed back to you" note/);
+  });
+
+  it('tells agents to record where the work lives with set_card_work', async () => {
+    expect(client.getInstructions()).toMatch(/call `set_card_work`/);
   });
 
   it('describes how triage handles each kind of inbox card', async () => {
@@ -510,5 +530,157 @@ describe('update_column_agents', () => {
     const tool = tools.find((t) => t.name === 'update_column_agents');
 
     expect(tool.description).toMatch(/replaces/i);
+  });
+});
+
+describe('set_card_work', () => {
+  const boardWithWork = (work?: object) => ({
+    identifier: 'b1',
+    columns: [{ identifier: 'c1', name: 'Code Review', cards: [{ identifier: 'card1', text: 'Fix', ...(work ? { work } : {}) }] }],
+  });
+
+  const workSent = () => {
+    const call = fetchSpy.mock.calls.find(([url, options]) =>
+      url === 'https://standup.test/api/boards/b1/cards/card1/work' && options?.method === 'PUT');
+    return JSON.parse(call[1].body);
+  };
+
+  it('records where the work lives on a card with no work yet', async () => {
+    fetchSpy.mockImplementation(async () => new Response(JSON.stringify(boardWithWork()), { status: 200 }));
+
+    await client.callTool({
+      name: 'set_card_work',
+      arguments: { boardId: 'b1', cardId: 'card1', branch: 'standup/fix', commits: ['811fca4'], repositoryPath: '/src/app' },
+    });
+
+    expect(workSent()).toEqual({ branch: 'standup/fix', commits: ['811fca4'], pushed: false, repositoryPath: '/src/app' });
+  });
+
+  it('adds new commits to the commits already recorded without duplicates', async () => {
+    const existing = { branch: 'standup/fix', commits: ['811fca4'], pushed: false, repositoryPath: '/src/app' };
+    fetchSpy.mockImplementation(async () => new Response(JSON.stringify(boardWithWork(existing)), { status: 200 }));
+
+    await client.callTool({
+      name: 'set_card_work',
+      arguments: { boardId: 'b1', cardId: 'card1', branch: 'standup/fix', commits: ['811fca4', '737d190'] },
+    });
+
+    expect(workSent()).toEqual({ ...existing, commits: ['811fca4', '737d190'] });
+  });
+
+  it('keeps recorded fields that are not given', async () => {
+    const existing = { branch: 'standup/fix', commits: ['811fca4'], pushed: false, repositoryPath: '/src/app' };
+    fetchSpy.mockImplementation(async () => new Response(JSON.stringify(boardWithWork(existing)), { status: 200 }));
+
+    await client.callTool({
+      name: 'set_card_work',
+      arguments: { boardId: 'b1', cardId: 'card1', pushed: true, pullRequestUrl: 'https://github.com/o/r/pull/1' },
+    });
+
+    expect(workSent()).toEqual({ ...existing, pushed: true, pullRequestUrl: 'https://github.com/o/r/pull/1' });
+  });
+
+  it('asks for a branch when the card has no work recorded yet', async () => {
+    fetchSpy.mockImplementation(async () => new Response(JSON.stringify(boardWithWork()), { status: 200 }));
+
+    const result = await client.callTool({ name: 'set_card_work', arguments: { boardId: 'b1', cardId: 'card1', pushed: true } });
+
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('handed-back notice', () => {
+  const handedBackBoard = {
+    identifier: 'b1',
+    columns: [{
+      identifier: 'c1',
+      name: 'Triage',
+      agents: [{ identifier: 'triage-1', name: 'Triage Agent' }],
+      cards: [{
+        identifier: 'card1',
+        text: 'Bump the version',
+        assignees: ['agent:triage-1'],
+        comments: [
+          { identifier: 'q1', author: 'u', text: 'Which?', agentId: 'triage-1' },
+          { identifier: 'r1', author: 'u', text: 'Minor' },
+        ],
+      }],
+    }],
+  };
+  const quietBoard = { identifier: 'b1', columns: [{ identifier: 'c1', name: 'Triage', cards: [] }] };
+
+  const respondTo = (routes: Record<string, unknown>) => {
+    fetchSpy.mockImplementation(async (url: string) => {
+      const path = url.replace('https://standup.test', '');
+      return new Response(JSON.stringify(routes[path] ?? {}), { status: 200 });
+    });
+  };
+
+  const boardFetches = () =>
+    fetchSpy.mock.calls.filter(([url]) => url === 'https://standup.test/api/boards/b1').length;
+
+  const texts = (result: Awaited<ReturnType<typeof client.callTool>>) =>
+    (result.content as Array<{ type: string; text: string }>).map((c) => c.text);
+
+  it('appends a note to the tool response when a card has been handed back', async () => {
+    respondTo({ '/api/boards/b1': handedBackBoard });
+
+    const result = await client.callTool({
+      name: 'add_comment',
+      arguments: { boardId: 'b1', cardId: 'other', text: 'Done', agentId: 'coding-1' },
+    });
+
+    expect(texts(result)[1]).toMatch(/Handed back to you[\s\S]*"Bump the version" \(card card1\) for Triage Agent/);
+  });
+
+  it('adds no note when nothing has been handed back', async () => {
+    respondTo({ '/api/boards/b1': quietBoard });
+
+    const result = await client.callTool({ name: 'get_comments', arguments: { boardId: 'b1', cardId: 'card1' } });
+
+    expect(texts(result)).toHaveLength(1);
+  });
+
+  it('uses the board returned by get_board instead of fetching it again', async () => {
+    respondTo({ '/api/boards/b1': handedBackBoard });
+
+    const result = await client.callTool({ name: 'get_board', arguments: { boardId: 'b1' } });
+
+    expect(boardFetches()).toBe(1);
+    expect(texts(result)[1]).toMatch(/Handed back to you/);
+  });
+
+  it('reuses a recently fetched board for read-only tools', async () => {
+    respondTo({ '/api/boards/b1': handedBackBoard });
+
+    await client.callTool({ name: 'get_board', arguments: { boardId: 'b1' } });
+    await client.callTool({ name: 'get_comments', arguments: { boardId: 'b1', cardId: 'card1' } });
+
+    expect(boardFetches()).toBe(1);
+  });
+
+  it('fetches the board again after a tool changes it', async () => {
+    respondTo({ '/api/boards/b1': handedBackBoard });
+
+    await client.callTool({ name: 'get_board', arguments: { boardId: 'b1' } });
+    await client.callTool({
+      name: 'add_comment',
+      arguments: { boardId: 'b1', cardId: 'card1', text: 'Resuming', agentId: 'triage-1' },
+    });
+
+    expect(boardFetches()).toBe(2);
+  });
+
+  it('still returns the tool result when the board cannot be fetched for the note', async () => {
+    fetchSpy.mockImplementation(async (url: string) =>
+      url.endsWith('/comments')
+        ? new Response(JSON.stringify([{ identifier: 'r1' }]), { status: 200 })
+        : new Response('boom', { status: 500 }),
+    );
+
+    const result = await client.callTool({ name: 'get_comments', arguments: { boardId: 'b1', cardId: 'card1' } });
+
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse(texts(result)[0])).toEqual([{ identifier: 'r1' }]);
   });
 });

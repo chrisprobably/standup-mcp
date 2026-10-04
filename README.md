@@ -65,6 +65,7 @@ You should see your boards returned. If you get an authentication error, double-
 | `add_comment` | Post a comment on a card (supports markdown, @mentions, clickable option buttons, and attribution to a column agent via `agentId`) |
 | `update_board_context` | Set a board's project context and/or repository URL |
 | `update_column_agents` | Replace a column's agents (send the full list) |
+| `set_card_work` | Record where a card's work lives (repo path, branch, commits, pushed, PR link); merges with what's already recorded |
 
 ## Example usage
 
@@ -80,10 +81,12 @@ Once connected, you can interact with your boards in natural language:
 
 The server includes built-in instructions that guide the AI agent to follow these conventions:
 
-- **Assignment** — assign yourself to a card when you start, unassign when done
-- **Progress updates** — add a comment summarising what you did before unassigning
-- **Blockers** — post a comment with clickable options, @mention the user, and move the card to an Awaiting Input column
-- **Pipeline flow** — advance cards left-to-right through columns; reject by moving back with a comment
+- **Assignment**: each column agent assigns itself as `agent:<identifier>`; agents in the same column work in parallel
+- **Priorities**: resume cards handed back after a person replied, then take unfinished cards nobody is assigned to
+- **Progress updates**: add a comment (attributed with `agentId`) summarising what you did before unassigning, and record where code changes live with `set_card_work` (shown on the card)
+- **Blockers**: post a comment with clickable options, @mention the user and assign the card to them in place. Standup hands it back to the agent when they answer
+- **Handed-back note**: tool responses include a "Handed back to you" note while a card is waiting to be resumed
+- **Pipeline flow**: advance cards left-to-right through columns; reject by moving back with a comment
 
 ## Development
 
