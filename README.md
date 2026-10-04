@@ -21,24 +21,16 @@ An [MCP](https://modelcontextprotocol.io/) server that connects AI coding agents
 
 #### Claude Code
 
-Add the following to your Claude Code config (`~/.claude/settings.json` or the project-level `.claude/settings.json`):
+Run the following command, replacing `sk-your-api-key-here` with your API key from step 1:
 
-```json
-{
-  "mcpServers": {
-    "standup": {
-      "command": "npx",
-      "args": ["-y", "thestandup-mcp"],
-      "env": {
-        "STANDUP_URL": "https://thestandup.app",
-        "STANDUP_API_KEY": "sk-your-api-key-here"
-      }
-    }
-  }
-}
+```bash
+claude mcp add standup \
+  -e STANDUP_URL=https://www.thestandup.app \
+  -e STANDUP_API_KEY=sk-your-api-key-here \
+  -- npx -y thestandup-mcp
 ```
 
-Replace `sk-your-api-key-here` with your API key from step 1.
+Then restart Claude Code for the server to connect.
 
 #### Other MCP clients
 
