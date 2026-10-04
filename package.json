@@ -1,5 +1,5 @@
 {
-  "name": "standup-mcp",
+  "name": "thestandup-mcp",
   "version": "1.0.0",
   "description": "MCP server for Standup kanban board",
   "type": "module",
@@ -7,11 +7,13 @@
   "bin": {
     "standup-mcp": "dist/index.js"
   },
+  "files": ["dist"],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "all": "tsc --noEmit && vitest run"
+    "all": "tsc --noEmit && vitest run",
+    "prepublishOnly": "npm run all && npm run build"
   },
   "keywords": ["mcp", "standup", "kanban"],
   "license": "MIT",
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "semantic-release": "^24.2.5",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   }
