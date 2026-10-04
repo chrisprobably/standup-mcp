@@ -12,6 +12,7 @@ const EXPECTED_TOOLS = [
   'move_card',
   'assign_card',
   'unassign_card',
+  'search_cards',
   'get_comments',
   'add_comment',
 ];
@@ -268,6 +269,25 @@ describe('unassign_card', () => {
         body: JSON.stringify({ assignees: ['alice'] }),
       }),
     );
+  });
+});
+
+describe('search_cards', () => {
+  it('calls GET /api/boards/search with query parameter', async () => {
+    const results = [{ boardId: 'b1', boardName: 'Board', cardId: 'card1', text: 'MCP integration' }];
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(results), { status: 200 }));
+
+    const result = await client.callTool({
+      name: 'search_cards',
+      arguments: { query: 'MCP' },
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/search?q=MCP',
+      expect.anything(),
+    );
+    const content = result.content as Array<{ type: string; text: string }>;
+    expect(JSON.parse(content[0].text)).toEqual(results);
   });
 });
 

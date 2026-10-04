@@ -94,6 +94,10 @@ export class StandupClient {
     });
   }
 
+  async searchCards(query: string): Promise<unknown> {
+    return this.request(`/api/boards/search?q=${encodeURIComponent(query)}`);
+  }
+
   findCardColumn(board: Board, cardId: string): Column | null {
     for (const column of board.columns) {
       if (column.cards?.some((c: Card) => c.identifier === cardId)) {

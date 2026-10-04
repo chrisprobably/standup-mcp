@@ -100,6 +100,17 @@ describe('moveCard', () => {
   });
 });
 
+describe('searchCards', () => {
+  it('calls GET /api/boards/search with encoded query', async () => {
+    fetchSpy.mockResolvedValue(ok([{ cardId: 'card1', text: 'result' }]));
+    await client.searchCards('hello world');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/search?q=hello%20world',
+      expect.anything(),
+    );
+  });
+});
+
 describe('findCardColumn', () => {
   it('returns the column containing the card', () => {
     const board = {

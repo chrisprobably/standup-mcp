@@ -121,6 +121,15 @@ export function createServer(config: ServerConfig): McpServer {
     return jsonResult(await client.setAssignees(boardId, resolved.column.identifier, cardId, updated));
   });
 
+  server.registerTool('search_cards', {
+    description: 'Search for cards across all boards by text content',
+    inputSchema: z.object({
+      query: z.string().describe('The search query'),
+    }),
+  }, async ({ query }) => {
+    return jsonResult(await client.searchCards(query));
+  });
+
   server.registerTool('get_comments', {
     description: 'Get all comments on a card',
     inputSchema: z.object({

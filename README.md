@@ -60,6 +60,7 @@ You should see your boards returned. If you get an authentication error, double-
 | `move_card` | Move a card to a different column |
 | `assign_card` | Assign a user to a card |
 | `unassign_card` | Remove a user from a card |
+| `search_cards` | Search for cards across all boards by text content |
 | `get_comments` | Get all comments on a card |
 | `add_comment` | Post a comment on a card (supports markdown, @mentions, and clickable option buttons) |
 
