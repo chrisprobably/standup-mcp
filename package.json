@@ -16,6 +16,10 @@
     "prepublishOnly": "npm run all && npm run build"
   },
   "keywords": ["mcp", "standup", "kanban"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chrisprobably/standup-mcp"
+  },
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.0",
