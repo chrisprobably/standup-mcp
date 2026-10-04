@@ -83,6 +83,27 @@ describe('server registration', () => {
     expect(instructions).not.toMatch(/Awaiting Input/);
   });
 
+  it('gives agents a default git workflow so boards do not need a git policy', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/### Where the work lives/);
+    expect(instructions).toMatch(/do not push/i);
+  });
+
+  it('tells agents to say where the work is when they change code', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/\*\*Where:\*\*/);
+    expect(instructions).toMatch(/commit/i);
+    expect(instructions).toMatch(/branch/i);
+  });
+
+  it('tells reviewers to assign themselves even when they only approve', async () => {
+    expect(client.getInstructions()).toMatch(/even if you only approve/i);
+  });
+
+  it('explains that standup hands a card back when the person answers', async () => {
+    expect(client.getInstructions()).toMatch(/hands the card back/i);
+  });
+
   it('describes how triage handles each kind of inbox card', async () => {
     const instructions = client.getInstructions();
     expect(instructions).toMatch(/### Triage/);
