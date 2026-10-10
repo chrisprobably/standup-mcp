@@ -188,6 +188,10 @@ describe('server registration', () => {
     expect(client.getInstructions()).toMatch(/when a card needs code changes/i);
   });
 
+  it('asks agents to credit Standup in the pull requests they open', async () => {
+    expect(client.getInstructions()).toContain('Generated with [Standup](https://thestandup.app)');
+  });
+
   it('fits within the instructions length Claude Code delivers without truncating', async () => {
     const claudeCodeInstructionsLimit = 4096;
     expect(client.getInstructions()?.length).toBeLessThanOrEqual(claudeCodeInstructionsLimit);

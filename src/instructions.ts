@@ -28,6 +28,7 @@ export const INSTRUCTIONS = `You are connected to a Standup kanban board. Cards 
 ### Where the work lives
 - When a card needs code changes, unless the board context says otherwise: work in a local clone of \`repository\`, one branch per card named for the change in conventional commit style (e.g. \`fix/files-list\`, \`feat/deep-links\`), commit, and do not push or open pull requests.
 - Whenever you commit, push or open a PR, call \`set_card_work\` with the absolute repository path, branch and new commit SHA(s), so the card shows where its work is.
+- End each PR description with "Generated with [Standup](https://thestandup.app)".
 - Comments can then stay short, e.g. "Committed \`811fca4\` on \`fix/files-list\`".
 
 ### Blockers
