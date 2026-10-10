@@ -47,13 +47,18 @@ describe('server registration', () => {
     expect(client.getInstructions()).toMatch(/`context`.*`repository`/);
   });
 
-  it('tells agents to pull inbox cards into the first active column', async () => {
-    expect(client.getInstructions()).toMatch(/first active column/i);
+  it('tells agents to pull cards out of a user column only when asked', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/only move cards out of a user column when the user asks/i);
+    expect(instructions).not.toMatch(/periodically pull/i);
   });
 
-  it('tells agents to leave the inbox and terminal columns alone', async () => {
-    expect(client.getInstructions()).toMatch(/never process cards in the first column/i);
-    expect(client.getInstructions()).toMatch(/terminal/i);
+  it('treats every column without an enabled agent as the user\'s, wherever it sits', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/column with no enabled agent belongs to the user/i);
+    expect(instructions).toMatch(/never process cards in a user column/i);
+    expect(instructions).not.toMatch(/first column/i);
+    expect(instructions).not.toMatch(/user column after an active stage is finished/i);
   });
 
   it('tells each column agent to assign itself as agent:<identifier>', async () => {
@@ -65,7 +70,19 @@ describe('server registration', () => {
   });
 
   it('tells agents never to work on cards assigned to a person', async () => {
-    expect(client.getInstructions()).toMatch(/never work on a card assigned to a person/i);
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/never work on a card assigned to a person/i);
+    expect(instructions).not.toMatch(/only read its comments/i);
+  });
+
+  it('advances a card once every agent in the column has finished, whether or not it approves', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/every enabled agent in the column has finished/i);
+    expect(instructions).not.toMatch(/has approved/i);
+  });
+
+  it('never lets agent assignments stop an agent from working a card', async () => {
+    expect(client.getInstructions()).toMatch(/agent assignments never stop you/i);
   });
 
   it('tells agents to judge whether they have finished a card from the comments and their times', async () => {
@@ -74,8 +91,10 @@ describe('server registration', () => {
     expect(instructions).not.toMatch(/stageEnteredAt/);
   });
 
-  it('tells agents to prompt the user about cards that have stalled', async () => {
-    expect(client.getInstructions()).toMatch(/stalled/i);
+  it('tells agents to chase a person who has not answered a card', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/if a person has not answered a card for a long time/i);
+    expect(instructions).not.toMatch(/stalled/i);
   });
 
   it('tells agents to block in place instead of using an awaiting input column', async () => {
@@ -88,6 +107,12 @@ describe('server registration', () => {
     const instructions = client.getInstructions();
     expect(instructions).toMatch(/### Where the work lives/);
     expect(instructions).toMatch(/do not push/i);
+  });
+
+  it('names branches after the nature of the change, not after standup', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/conventional commit/i);
+    expect(instructions).not.toMatch(/standup\//);
   });
 
   it('tells agents to record the repository path, branch and commits on the card', async () => {
@@ -113,7 +138,7 @@ describe('server registration', () => {
   it('does not treat a card assigned to your own agent as off limits', async () => {
     const instructions = client.getInstructions();
     expect(instructions).not.toMatch(/is not already assigned to it/);
-    expect(instructions).toMatch(/assigned to one of your agents means it is yours to continue/i);
+    expect(instructions).toMatch(/a card assigned to one of your agents is yours to continue/i);
   });
 
   it('tells agents to act on the handed-back note in tool responses', async () => {
@@ -129,6 +154,43 @@ describe('server registration', () => {
     expect(instructions).toMatch(/### Triage/);
     expect(instructions).toMatch(/ambiguous/i);
     expect(instructions).toMatch(/empty/i);
+  });
+
+  it('tells agents to carry an advanced card on through the next column instead of stopping', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/### Running the pipeline/);
+    expect(instructions).toMatch(/carry on with it in its new column/i);
+  });
+
+  it('tells agents how to explain a handed-back card that was not picked up', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/why a handed-back card was not picked up/i);
+    expect(instructions).toMatch(/`\/loop/);
+  });
+
+  it('does not tell agents when to stop, since people can hand cards back at any time', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).not.toMatch(/stop only when/i);
+    expect(instructions).not.toMatch(/until no card is workable/i);
+  });
+
+  it('runs the pipeline by default without needing board context', async () => {
+    expect(client.getInstructions()).toMatch(/board context is optional/i);
+  });
+
+  it('covers board context in one section only', async () => {
+    const instructions = client.getInstructions() ?? '';
+    const pipelineSection = instructions.split('### Running the pipeline')[1].split('###')[0];
+    expect(pipelineSection).not.toMatch(/board context/i);
+  });
+
+  it('applies the branch and commit workflow only to cards that need code changes', async () => {
+    expect(client.getInstructions()).toMatch(/when a card needs code changes/i);
+  });
+
+  it('fits within the instructions length Claude Code delivers without truncating', async () => {
+    const claudeCodeInstructionsLimit = 4096;
+    expect(client.getInstructions()?.length).toBeLessThanOrEqual(claudeCodeInstructionsLimit);
   });
 });
 
@@ -550,26 +612,26 @@ describe('set_card_work', () => {
 
     await client.callTool({
       name: 'set_card_work',
-      arguments: { boardId: 'b1', cardId: 'card1', branch: 'standup/fix', commits: ['811fca4'], repositoryPath: '/src/app' },
+      arguments: { boardId: 'b1', cardId: 'card1', branch: 'fix/files-list', commits: ['811fca4'], repositoryPath: '/src/app' },
     });
 
-    expect(workSent()).toEqual({ branch: 'standup/fix', commits: ['811fca4'], pushed: false, repositoryPath: '/src/app' });
+    expect(workSent()).toEqual({ branch: 'fix/files-list', commits: ['811fca4'], pushed: false, repositoryPath: '/src/app' });
   });
 
   it('adds new commits to the commits already recorded without duplicates', async () => {
-    const existing = { branch: 'standup/fix', commits: ['811fca4'], pushed: false, repositoryPath: '/src/app' };
+    const existing = { branch: 'fix/files-list', commits: ['811fca4'], pushed: false, repositoryPath: '/src/app' };
     fetchSpy.mockImplementation(async () => new Response(JSON.stringify(boardWithWork(existing)), { status: 200 }));
 
     await client.callTool({
       name: 'set_card_work',
-      arguments: { boardId: 'b1', cardId: 'card1', branch: 'standup/fix', commits: ['811fca4', '737d190'] },
+      arguments: { boardId: 'b1', cardId: 'card1', branch: 'fix/files-list', commits: ['811fca4', '737d190'] },
     });
 
     expect(workSent()).toEqual({ ...existing, commits: ['811fca4', '737d190'] });
   });
 
   it('keeps recorded fields that are not given', async () => {
-    const existing = { branch: 'standup/fix', commits: ['811fca4'], pushed: false, repositoryPath: '/src/app' };
+    const existing = { branch: 'fix/files-list', commits: ['811fca4'], pushed: false, repositoryPath: '/src/app' };
     fetchSpy.mockImplementation(async () => new Response(JSON.stringify(boardWithWork(existing)), { status: 200 }));
 
     await client.callTool({

@@ -87,6 +87,15 @@ The server includes built-in instructions that guide the AI agent to follow thes
 - **Blockers**: post a comment with clickable options, @mention the user and assign the card to them in place. Standup hands it back to the agent when they answer
 - **Handed-back note**: tool responses include a "Handed back to you" note while a card is waiting to be resumed
 - **Pipeline flow**: advance cards left-to-right through columns; reject by moving back with a comment
+- **Running the pipeline**: when asked to process a board, carry each card on through every agent column rather than stopping after one stage; board context is optional
+- **Instruction length**: Claude Code truncates server instructions at 4,096 characters, so a test keeps them under that limit
+
+## Keeping agents running
+
+Agents only act while a session is running; Standup cannot start one. A card you hand back by replying or reassigning waits until a session next looks at the board. To have it picked up without asking, keep a session polling:
+
+- **Claude Code**: `/loop 15m process the <board name> board`
+- **Other agents**: a scheduler or cron job that starts the agent with the same prompt
 
 ## Development
 
