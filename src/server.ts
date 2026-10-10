@@ -219,7 +219,108 @@ export function createServer(config: ServerConfig): McpServer {
     return respondAfterChange(boardId, await client.setCardWork(boardId, cardId, work));
   });
 
+  server.registerTool('add_column', {
+    description: 'Add an empty column to a board',
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+      name: z.string().describe('The column name'),
+      index: z.number().optional().describe('Position among the columns (0-based). Defaults to the end.'),
+    }),
+  }, async ({ boardId, name, index }) => {
+    return respondAfterChange(boardId, await client.addColumn(boardId, name, index));
+  });
+
+  server.registerTool('rename_column', {
+    description: 'Rename a column',
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+      columnId: z.string().describe('The column identifier'),
+      name: z.string().describe('The new column name'),
+    }),
+  }, async ({ boardId, columnId, name }) => {
+    return respondAfterChange(boardId, await client.renameColumn(boardId, columnId, name));
+  });
+
+  server.registerTool('reorder_column', {
+    description: 'Move a column to a new position on its board, keeping its cards',
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+      columnId: z.string().describe('The column identifier'),
+      index: z.number().describe('New position among the columns (0-based)'),
+    }),
+  }, async ({ boardId, columnId, index }) => {
+    return respondAfterChange(boardId, await client.reorderColumn(boardId, columnId, index));
+  });
+
+  server.registerTool('delete_column', {
+    description: 'Delete a column. Refused while it has cards, unless deleteCards is true, which permanently deletes them too.',
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+      columnId: z.string().describe('The column identifier'),
+      deleteCards: z.boolean().optional().describe('Also delete the cards in the column (default false)'),
+    }),
+  }, async ({ boardId, columnId, deleteCards }) => {
+    return respondAfterChange(boardId, await client.deleteColumn(boardId, columnId, deleteCards));
+  });
+
+  server.registerTool('add_sticker', {
+    description: 'Add a sticker (an emoji) to a card. Automatically finds the column containing the card.',
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+      cardId: z.string().describe('The card identifier'),
+      sticker: z.string().describe('The emoji, e.g. 👍'),
+    }),
+  }, async ({ boardId, cardId, sticker }) => {
+    const resolved = await resolveCard(boardId, cardId);
+    if (!resolved) return cardNotFound(boardId, cardId);
+    return respondAfterChange(boardId, await client.addSticker(boardId, resolved.column.identifier, cardId, sticker));
+  });
+
+  server.registerTool('remove_sticker', {
+    description: 'Remove a sticker from a card. If the card has the same sticker more than once, one is removed.',
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+      cardId: z.string().describe('The card identifier'),
+      sticker: z.string().describe('The emoji to remove'),
+    }),
+  }, async ({ boardId, cardId, sticker }) => {
+    const resolved = await resolveCard(boardId, cardId);
+    if (!resolved) return cardNotFound(boardId, cardId);
+    const index = resolved.card.stickers?.indexOf(sticker) ?? -1;
+    if (index === -1) {
+      return errorResult(`Card ${cardId} has no ${sticker} sticker`);
+    }
+    return respondAfterChange(boardId, await client.removeSticker(boardId, resolved.column.identifier, cardId, index));
+  });
+
+  server.registerTool('get_attachment', {
+    description: "Get a file attached to a card, using the fileId from the card's attachments in get_board. Images are returned so you can see them.",
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+      cardId: z.string().describe('The card identifier'),
+      fileId: z.string().describe('The attachment fileId'),
+    }),
+  }, async ({ boardId, cardId, fileId }) => {
+    const { data, mimeType } = await client.getAttachment(boardId, cardId, fileId);
+    const uri = `standup://boards/${boardId}/cards/${cardId}/attachments/${fileId}`;
+    return { content: [attachmentContent(data, mimeType, uri)] };
+  });
+
   return server;
+}
+
+function attachmentContent(data: string, mimeType: string, uri: string) {
+  if (mimeType.startsWith('image/')) {
+    return { type: 'image' as const, data, mimeType };
+  }
+  if (mimeType.startsWith('text/')) {
+    return { type: 'text' as const, text: Buffer.from(data, 'base64').toString('utf8') };
+  }
+  return { type: 'resource' as const, resource: { uri, mimeType, blob: data } };
+}
+
+function errorResult(text: string) {
+  return { content: [{ type: 'text' as const, text }], isError: true };
 }
 
 function jsonResult(data: unknown) {
@@ -227,5 +328,5 @@ function jsonResult(data: unknown) {
 }
 
 function cardNotFound(boardId: string, cardId: string) {
-  return { content: [{ type: 'text' as const, text: `Card ${cardId} not found on board ${boardId}` }], isError: true };
+  return errorResult(`Card ${cardId} not found on board ${boardId}`);
 }
