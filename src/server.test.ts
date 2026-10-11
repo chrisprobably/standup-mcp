@@ -54,16 +54,21 @@ describe('server registration', () => {
     expect(client.getInstructions()).toMatch(/`context`.*`repository`/);
   });
 
-  it('tells agents to pull cards out of a user column only when asked', async () => {
+  it('lets the user or agent instructions decide when cards in a user column are processed or moved', async () => {
     const instructions = client.getInstructions();
-    expect(instructions).toMatch(/only move cards out of a user column when the user asks/i);
+    expect(instructions).toMatch(/only process \/ move cards where instructed by the user or agent instruction/i);
+    expect(instructions).not.toMatch(/never process cards in a user column/i);
+    expect(instructions).not.toMatch(/only move cards out of a user column when the user asks/i);
     expect(instructions).not.toMatch(/periodically pull/i);
+  });
+
+  it('tells agents to ask the user via comments on the card when unsure whether they have finished', async () => {
+    expect(client.getInstructions()).toMatch(/if unclear, ask the user via comments on the card\./i);
   });
 
   it('treats every column without an enabled agent as the user\'s, wherever it sits', async () => {
     const instructions = client.getInstructions();
-    expect(instructions).toMatch(/column with no enabled agent belongs to the user/i);
-    expect(instructions).toMatch(/never process cards in a user column/i);
+    expect(instructions).toMatch(/column with no enabled agent belongs to the user, wherever it sits/i);
     expect(instructions).not.toMatch(/first column/i);
     expect(instructions).not.toMatch(/user column after an active stage is finished/i);
   });
