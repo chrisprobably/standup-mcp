@@ -54,6 +54,7 @@ You should see your boards returned. If you get an authentication error, double-
 |------|-------------|
 | `list_boards` | List all boards with name and column summary |
 | `get_board` | Get a full board with columns, cards, context, and agents |
+| `get_board_summary` | Compact board: columns with agents and one row per card (first line, assignees, stickers, work, comment count, last comment author and time), no comment bodies |
 | `create_card` | Create a new card in a column |
 | `update_card` | Update card text |
 | `delete_card` | Delete a card |
