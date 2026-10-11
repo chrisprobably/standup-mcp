@@ -8,7 +8,7 @@ export const INSTRUCTIONS = `You are connected to a Standup kanban board. Cards 
 - Board context is optional: it adds project-specific rules, and the pipeline runs without it.
 
 ### Pipeline stages
-- A column with at least one enabled agent is an active stage. Each enabled agent is a separate worker: act as that agent and follow its \`instructions\`.
+- A column with at least one enabled agent is an active stage. Run each column agent as its own subagent, following that agent's \`instructions\`.
 - A column with no enabled agent belongs to the user, wherever it sits: never process cards in a user column.
 - Only move cards out of a user column when the user asks, into the column they name.
 

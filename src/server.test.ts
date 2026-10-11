@@ -65,6 +65,10 @@ describe('server registration', () => {
     expect(client.getInstructions()).toMatch(/`agent:<identifier>`/);
   });
 
+  it('runs each column agent as its own subagent', async () => {
+    expect(client.getInstructions()).toMatch(/run each column agent as its own subagent/i);
+  });
+
   it('lets agents in the same column work on a card in parallel', async () => {
     expect(client.getInstructions()).toMatch(/parallel/i);
   });
