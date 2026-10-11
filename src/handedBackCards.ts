@@ -1,4 +1,5 @@
 import type { Board, Card } from './standupClient.js';
+import { plainCardText } from './cardText.js';
 
 const AGENT_ASSIGNEE_PREFIX = 'agent:';
 
@@ -7,21 +8,6 @@ export interface HandedBackCard {
   cardText: string;
   agentId: string;
   agentName: string;
-}
-
-function plainCardText(text: string): string {
-  try {
-    const parsed = JSON.parse(text);
-    if (parsed?.blocks) {
-      return parsed.blocks
-        .map((block: { data?: { text?: string } }) => block.data?.text ?? '')
-        .join(' ')
-        .replace(/<[^>]+>/g, '');
-    }
-  } catch {
-    // plain text or markdown card
-  }
-  return text;
 }
 
 function handedBackAgentId(card: Card): string | null {

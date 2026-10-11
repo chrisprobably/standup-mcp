@@ -4,6 +4,7 @@ import { StandupClient } from './standupClient.js';
 import { INSTRUCTIONS } from './instructions.js';
 import { HandedBackTracker } from './handedBackTracker.js';
 import { mergeCardWork } from './mergeCardWork.js';
+import { summarizeBoard } from './boardSummary.js';
 
 export interface ServerConfig {
   baseUrl: string;
@@ -32,6 +33,12 @@ export function createServer(config: ServerConfig): McpServer {
     return respond(boardId, data);
   }
 
+  async function fetchBoard(boardId: string) {
+    const board = await client.getBoard(boardId);
+    handedBack.remember(board);
+    return board;
+  }
+
   async function resolveCard(boardId: string, cardId: string) {
     const board = await client.getBoard(boardId);
     const column = client.findCardColumn(board, cardId);
@@ -53,9 +60,16 @@ export function createServer(config: ServerConfig): McpServer {
       boardId: z.string().describe('The board identifier'),
     }),
   }, async ({ boardId }) => {
-    const board = await client.getBoard(boardId);
-    handedBack.remember(board);
-    return respond(boardId, board);
+    return respond(boardId, await fetchBoard(boardId));
+  });
+
+  server.registerTool('get_board_summary', {
+    description: 'Get a compact board: name, context, repository, columns with agents, and one row per card in every column with its first line, assignees, stickers, work, comment count and last comment author, agentId and time. No comment bodies: use get_comments or get_board for full content.',
+    inputSchema: z.object({
+      boardId: z.string().describe('The board identifier'),
+    }),
+  }, async ({ boardId }) => {
+    return respond(boardId, summarizeBoard(await fetchBoard(boardId)));
   });
 
   server.registerTool('create_card', {

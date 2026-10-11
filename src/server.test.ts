@@ -6,6 +6,7 @@ import { createServer } from './server.js';
 const EXPECTED_TOOLS = [
   'list_boards',
   'get_board',
+  'get_board_summary',
   'create_card',
   'update_card',
   'delete_card',
@@ -204,6 +205,12 @@ describe('server registration', () => {
     expect(client.getInstructions()).toMatch(/when a card needs code changes/i);
   });
 
+  it('tells agents to start a pass with the board summary and fetch full content only when needed', async () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toMatch(/start each pass with `get_board_summary`/i);
+    expect(instructions).toMatch(/`get_board`.*`get_comments`.*full/i);
+  });
+
   it('fits within the instructions length Claude Code delivers without truncating', async () => {
     const claudeCodeInstructionsLimit = 4096;
     expect(client.getInstructions()?.length).toBeLessThanOrEqual(claudeCodeInstructionsLimit);
@@ -243,6 +250,33 @@ describe('get_board', () => {
     );
     const content = result.content as Array<{ type: string; text: string }>;
     expect(JSON.parse(content[0].text)).toEqual(board);
+  });
+});
+
+describe('get_board_summary', () => {
+  it('fetches the board and returns its summary without comment bodies', async () => {
+    const board = {
+      identifier: 'b1',
+      name: 'Board',
+      columns: [{
+        identifier: 'c1',
+        name: 'To Do',
+        cards: [{
+          identifier: 'k1',
+          text: 'Fix it',
+          comments: [{ identifier: 'm1', author: 'chris', text: 'Secret body', createdAt: '2026-10-11T08:00:00Z' }],
+        }],
+      }],
+    };
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(board), { status: 200 }));
+
+    const result = await client.callTool({ name: 'get_board_summary', arguments: { boardId: 'b1' } });
+
+    expect(fetchSpy).toHaveBeenCalledWith('https://standup.test/api/boards/b1', expect.anything());
+    const content = result.content as Array<{ type: string; text: string }>;
+    const summary = JSON.parse(content[0].text);
+    expect(summary.cards[0]).toMatchObject({ identifier: 'k1', firstLine: 'Fix it', commentCount: 1 });
+    expect(content[0].text).not.toMatch(/Secret body/);
   });
 });
 
@@ -723,6 +757,15 @@ describe('handed-back notice', () => {
     respondTo({ '/api/boards/b1': handedBackBoard });
 
     const result = await client.callTool({ name: 'get_board', arguments: { boardId: 'b1' } });
+
+    expect(boardFetches()).toBe(1);
+    expect(texts(result)[1]).toMatch(/Handed back to you/);
+  });
+
+  it('uses the board fetched for get_board_summary instead of fetching it again', async () => {
+    respondTo({ '/api/boards/b1': handedBackBoard });
+
+    const result = await client.callTool({ name: 'get_board_summary', arguments: { boardId: 'b1' } });
 
     expect(boardFetches()).toBe(1);
     expect(texts(result)[1]).toMatch(/Handed back to you/);

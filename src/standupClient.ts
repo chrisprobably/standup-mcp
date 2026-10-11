@@ -201,6 +201,7 @@ export interface CardComment {
   author: string;
   text: string;
   agentId?: string;
+  createdAt?: string;
 }
 
 export interface CardWork {
@@ -223,6 +224,8 @@ export interface Card {
 export interface ColumnAgent {
   identifier: string;
   name: string;
+  instructions?: string;
+  enabled?: boolean;
 }
 
 export interface Column {
@@ -234,6 +237,9 @@ export interface Column {
 
 export interface Board {
   identifier: string;
+  name?: string;
+  context?: string;
+  repository?: string;
   columns: Column[];
 }
 
