@@ -882,9 +882,37 @@ describe('remove_sticker', () => {
     expect(result.isError).toBe(true);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('returns an error without calling the API when the card has no stickers', async () => {
+    fetchSpy.mockResolvedValueOnce(json(boardWithCard()));
+
+    const result = await client.callTool({ name: 'remove_sticker', arguments: { boardId: 'b1', cardId: 'card1', sticker: '👍' } });
+
+    expect(result.isError).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns an error when the card is not found', async () => {
+    fetchSpy.mockResolvedValueOnce(json(boardWithCard()));
+
+    const result = await client.callTool({ name: 'remove_sticker', arguments: { boardId: 'b1', cardId: 'missing', sticker: '👍' } });
+
+    expect(result.isError).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('get_attachment', () => {
+  it('reports the server error when the attachment is not found', async () => {
+    fetchSpy.mockResolvedValue(json({ error: 'Attachment not found' }, 404));
+
+    const result = await client.callTool({ name: 'get_attachment', arguments: { boardId: 'b1', cardId: 'card1', fileId: 'missing' } });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as Array<{ type: string; text: string }>;
+    expect(content[0].text).toContain('Attachment not found');
+  });
+
   const file = (body: string | Uint8Array, contentType: string) =>
     new Response(body, { status: 200, headers: { 'Content-Type': contentType } });
 
