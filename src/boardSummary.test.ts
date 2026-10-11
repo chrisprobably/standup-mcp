@@ -64,6 +64,60 @@ describe('summarizeBoard', () => {
     ]);
   });
 
+  it('keeps empty columns and skips them when listing cards', () => {
+    const board: Board = {
+      identifier: 'b1',
+      columns: [
+        { identifier: 'c1', name: 'Inbox', cards: [] },
+        { identifier: 'c2', name: 'Triage' },
+        { identifier: 'c3', name: 'Done', cards: [{ identifier: 'k1', text: 'A' }] },
+      ],
+    };
+
+    const summary = summarizeBoard(board);
+
+    expect(summary.columns.map((column) => column.identifier)).toEqual(['c1', 'c2', 'c3']);
+    expect(summary.cards.map(({ identifier, columnId, position }) => ({ identifier, columnId, position }))).toEqual([
+      { identifier: 'k1', columnId: 'c3', position: 0 },
+    ]);
+  });
+
+  it('gives an empty card list for a board whose columns are all empty', () => {
+    const board: Board = { identifier: 'b1', columns: [{ identifier: 'c1', name: 'Inbox', cards: [] }] };
+
+    expect(summarizeBoard(board).cards).toEqual([]);
+  });
+
+  it('gives null for the board name, context and repository when they are missing', () => {
+    const summary = summarizeBoard({ identifier: 'b1', columns: [] });
+
+    expect(summary).toEqual({ identifier: 'b1', name: null, context: null, repository: null, columns: [], cards: [] });
+  });
+
+  it('gives a null createdAt when the last comment has none', () => {
+    const card = onlyCard({
+      identifier: 'k1',
+      text: 'T',
+      comments: [
+        { identifier: 'm1', author: 'chris', text: 'First', createdAt: '2026-10-11T08:00:00Z' },
+        { identifier: 'm2', author: 'bot', text: 'Second', agentId: 'a1' },
+      ],
+    });
+
+    expect(card.lastComment).toEqual({ author: 'bot', agentId: 'a1', createdAt: null });
+  });
+
+  it('treats an empty comment list as no comments', () => {
+    const card = onlyCard({ identifier: 'k1', text: 'T', comments: [] });
+
+    expect(card.commentCount).toBe(0);
+    expect(card.lastComment).toBeNull();
+  });
+
+  it('gives an empty first line for a card with no text', () => {
+    expect(onlyCard({ identifier: 'k1' } as Card).firstLine).toBe('');
+  });
+
   it('summarizes a card with no comments, work or stickers', () => {
     const card = onlyCard({ identifier: 'k1', text: 'Fix the login bug' });
 
