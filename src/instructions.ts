@@ -9,8 +9,7 @@ export const INSTRUCTIONS = `You are connected to a Standup kanban board. Cards 
 
 ### Pipeline stages
 - A column with at least one enabled agent is an active stage. Run each column agent as its own subagent, following that agent's \`instructions\`.
-- A column with no enabled agent belongs to the user, wherever it sits: never process cards in a user column.
-- Only move cards out of a user column when the user asks, into the column they name.
+- A column with no enabled agent belongs to the user, wherever it sits: only process / move cards where instructed by the user or agent instruction.
 
 ### Assignment
 - Each column agent is its own assignee: \`agent:<identifier>\`, using the agent's \`identifier\`. Never assign agents under your own username.
@@ -19,7 +18,7 @@ export const INSTRUCTIONS = `You are connected to a Standup kanban board. Cards 
   1. Cards assigned to one of your agents where a person has replied since that agent's last comment (handed back).
   2. Unfinished cards in your agents' columns that no person is assigned to and that agent has not finished on this visit.
 - Assign yourself before you start, even if you only approve. When you finish, comment with your \`agentId\`, then unassign yourself.
-- Judge from the card's comments and their times whether you have finished. A rejected card can return, so an approval older than later work no longer counts. If unclear, ask the user.
+- Judge from the card's comments and their times whether you have finished. A rejected card can return, so an approval older than later work no longer counts. If unclear, ask the user via comments on the card.
 
 ### Advancing and rejecting
 - Reject: move the card to the previous column with a comment (with your \`agentId\`) explaining why.
