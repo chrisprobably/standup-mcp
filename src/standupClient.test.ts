@@ -146,3 +146,117 @@ describe('findCard', () => {
     expect(client.findCard(board, 'missing')).toBeNull();
   });
 });
+
+describe('addColumn', () => {
+  it('calls POST with the name and index', async () => {
+    fetchSpy.mockResolvedValue(ok({ identifier: 'c9' }, 201));
+    await client.addColumn('b1', 'Review', 1);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Review', index: 1 }) }),
+    );
+  });
+
+  it('omits index when undefined', async () => {
+    fetchSpy.mockResolvedValue(ok({ identifier: 'c9' }, 201));
+    await client.addColumn('b1', 'Review');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ body: JSON.stringify({ name: 'Review' }) }),
+    );
+  });
+});
+
+describe('renameColumn', () => {
+  it('calls PUT with the new name', async () => {
+    fetchSpy.mockResolvedValue(ok({ identifier: 'c1' }));
+    await client.renameColumn('b1', 'c1', 'Backlog');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ name: 'Backlog' }) }),
+    );
+  });
+});
+
+describe('reorderColumn', () => {
+  it('calls the move endpoint with the index', async () => {
+    fetchSpy.mockResolvedValue(ok({ success: true }));
+    await client.reorderColumn('b1', 'c1', 0);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1/move',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ index: 0 }) }),
+    );
+  });
+});
+
+describe('deleteColumn', () => {
+  it('calls DELETE without deleting cards by default', async () => {
+    fetchSpy.mockResolvedValue(ok({ success: true }));
+    await client.deleteColumn('b1', 'c1');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('asks the server to delete the cards when requested', async () => {
+    fetchSpy.mockResolvedValue(ok({ success: true }));
+    await client.deleteColumn('b1', 'c1', true);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1?deleteCards=true',
+      expect.anything(),
+    );
+  });
+});
+
+describe('addSticker', () => {
+  it('calls POST with the sticker', async () => {
+    fetchSpy.mockResolvedValue(ok({ identifier: 'card1' }));
+    await client.addSticker('b1', 'c1', 'card1', '🫠');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1/cards/card1/stickers',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ sticker: '🫠' }) }),
+    );
+  });
+});
+
+describe('removeSticker', () => {
+  it('calls DELETE with the sticker index', async () => {
+    fetchSpy.mockResolvedValue(ok({ identifier: 'card1' }));
+    await client.removeSticker('b1', 'c1', 'card1', 2);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1/cards/card1/stickers/2',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+});
+
+describe('getAttachment', () => {
+  it('returns the file as base64 with its content type', async () => {
+    fetchSpy.mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: { 'Content-Type': 'image/png' },
+    }));
+
+    const attachment = await client.getAttachment('b1', 'card1', 'f1');
+
+    expect(fetchSpy).toHaveBeenCalledWith('https://standup.test/api/boards/b1/cards/card1/attachments/f1', expect.anything());
+    expect(attachment).toEqual({ data: 'AQID', mimeType: 'image/png' });
+  });
+
+  it('drops content type parameters such as the charset', async () => {
+    fetchSpy.mockResolvedValue(new Response('notes', {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    }));
+
+    const attachment = await client.getAttachment('b1', 'card1', 'f1');
+
+    expect(attachment.mimeType).toBe('text/plain');
+  });
+
+  it('throws on non-ok response', async () => {
+    fetchSpy.mockResolvedValue(new Response('{"error":"Attachment not found"}', { status: 404 }));
+    await expect(client.getAttachment('b1', 'card1', 'f1')).rejects.toThrow('Standup API error 404');
+  });
+});

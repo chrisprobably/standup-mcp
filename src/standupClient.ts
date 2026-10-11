@@ -17,7 +17,7 @@ export class StandupClient {
     this.fetchFn = config.fetchFn ?? globalThis.fetch;
   }
 
-  private async request(path: string, options: RequestInit = {}): Promise<unknown> {
+  private async fetchOk(path: string, options: RequestInit = {}): Promise<Response> {
     const url = `${this.baseUrl}${path}`;
     const response = await this.fetchFn(url, {
       ...options,
@@ -33,7 +33,11 @@ export class StandupClient {
       throw new Error(`Standup API error ${response.status}: ${body}`);
     }
 
-    return response.json();
+    return response;
+  }
+
+  private async request(path: string, options: RequestInit = {}): Promise<unknown> {
+    return (await this.fetchOk(path, options)).json();
   }
 
   async listBoards(): Promise<unknown> {
@@ -119,6 +123,57 @@ export class StandupClient {
     });
   }
 
+  async addColumn(boardId: string, name: string, index?: number): Promise<unknown> {
+    const body: Record<string, unknown> = { name };
+    if (index !== undefined) body.index = index;
+    return this.request(`/api/boards/${boardId}/columns`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async renameColumn(boardId: string, columnId: string, name: string): Promise<unknown> {
+    return this.request(`/api/boards/${boardId}/columns/${columnId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async reorderColumn(boardId: string, columnId: string, index: number): Promise<unknown> {
+    return this.request(`/api/boards/${boardId}/columns/${columnId}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ index }),
+    });
+  }
+
+  async deleteColumn(boardId: string, columnId: string, deleteCards = false): Promise<unknown> {
+    const query = deleteCards ? '?deleteCards=true' : '';
+    return this.request(`/api/boards/${boardId}/columns/${columnId}${query}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async addSticker(boardId: string, columnId: string, cardId: string, sticker: string): Promise<unknown> {
+    return this.request(`/api/boards/${boardId}/columns/${columnId}/cards/${cardId}/stickers`, {
+      method: 'POST',
+      body: JSON.stringify({ sticker }),
+    });
+  }
+
+  async removeSticker(boardId: string, columnId: string, cardId: string, index: number): Promise<unknown> {
+    return this.request(`/api/boards/${boardId}/columns/${columnId}/cards/${cardId}/stickers/${index}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getAttachment(boardId: string, cardId: string, fileId: string): Promise<AttachmentContent> {
+    const response = await this.fetchOk(`/api/boards/${boardId}/cards/${cardId}/attachments/${fileId}`);
+    const data = Buffer.from(await response.arrayBuffer()).toString('base64');
+    const contentType = response.headers.get('Content-Type') ?? 'application/octet-stream';
+    const mimeType = contentType.split(';')[0].trim();
+    return { data, mimeType };
+  }
+
   async searchCards(query: string): Promise<unknown> {
     return this.request(`/api/boards/search?q=${encodeURIComponent(query)}`);
   }
@@ -160,6 +215,7 @@ export interface Card {
   identifier: string;
   text: string;
   assignees?: string[];
+  stickers?: string[];
   comments?: CardComment[];
   work?: CardWork;
 }
@@ -186,4 +242,9 @@ export interface ColumnAgentInput {
   name: string;
   instructions?: string;
   enabled?: boolean;
+}
+
+export interface AttachmentContent {
+  data: string;
+  mimeType: string;
 }

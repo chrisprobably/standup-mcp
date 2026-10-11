@@ -18,6 +18,13 @@ const EXPECTED_TOOLS = [
   'update_board_context',
   'update_column_agents',
   'set_card_work',
+  'add_column',
+  'rename_column',
+  'reorder_column',
+  'delete_column',
+  'add_sticker',
+  'remove_sticker',
+  'get_attachment',
 ];
 
 let client: Client;
@@ -748,5 +755,196 @@ describe('handed-back notice', () => {
 
     expect(result.isError).toBeFalsy();
     expect(JSON.parse(texts(result)[0])).toEqual([{ identifier: 'r1' }]);
+  });
+});
+
+const json = (data: unknown, status = 200) =>
+  new Response(JSON.stringify(data), { status });
+
+const boardWithCard = (card: Record<string, unknown> = {}) => ({
+  identifier: 'b1',
+  columns: [{ identifier: 'c1', name: 'To Do', cards: [{ identifier: 'card1', text: 'Task', ...card }] }],
+});
+
+describe('add_column', () => {
+  it('calls POST to add the column at the index', async () => {
+    fetchSpy.mockResolvedValue(json({ identifier: 'c9', name: 'Review', cards: [] }, 201));
+
+    const result = await client.callTool({ name: 'add_column', arguments: { boardId: 'b1', name: 'Review', index: 1 } });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Review', index: 1 }) }),
+    );
+    const content = result.content as Array<{ type: string; text: string }>;
+    expect(JSON.parse(content[0].text).identifier).toBe('c9');
+  });
+});
+
+describe('rename_column', () => {
+  it('calls PUT with the new name', async () => {
+    fetchSpy.mockResolvedValue(json({ identifier: 'c1', name: 'Backlog' }));
+
+    await client.callTool({ name: 'rename_column', arguments: { boardId: 'b1', columnId: 'c1', name: 'Backlog' } });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ name: 'Backlog' }) }),
+    );
+  });
+});
+
+describe('reorder_column', () => {
+  it('calls the move endpoint with the index', async () => {
+    fetchSpy.mockResolvedValue(json({ success: true }));
+
+    await client.callTool({ name: 'reorder_column', arguments: { boardId: 'b1', columnId: 'c1', index: 0 } });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1/move',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ index: 0 }) }),
+    );
+  });
+});
+
+describe('delete_column', () => {
+  it('keeps the cards safe by default', async () => {
+    fetchSpy.mockResolvedValue(json({ success: true }));
+
+    await client.callTool({ name: 'delete_column', arguments: { boardId: 'b1', columnId: 'c1' } });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('deletes the cards with the column only when asked', async () => {
+    fetchSpy.mockResolvedValue(json({ success: true }));
+
+    await client.callTool({ name: 'delete_column', arguments: { boardId: 'b1', columnId: 'c1', deleteCards: true } });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1?deleteCards=true',
+      expect.anything(),
+    );
+  });
+
+  it('reports the refusal when the column still has cards', async () => {
+    fetchSpy.mockResolvedValue(json({ error: 'Column has 2 card(s). Move them first, or pass deleteCards=true to delete them with the column' }, 409));
+
+    const result = await client.callTool({ name: 'delete_column', arguments: { boardId: 'b1', columnId: 'c1' } });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as Array<{ type: string; text: string }>;
+    expect(content[0].text).toContain('Column has 2 card(s)');
+  });
+});
+
+describe('add_sticker', () => {
+  it('finds the card column and calls POST with the sticker', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(json(boardWithCard()))
+      .mockResolvedValueOnce(json({ identifier: 'card1', stickers: ['🫠'] }));
+
+    await client.callTool({ name: 'add_sticker', arguments: { boardId: 'b1', cardId: 'card1', sticker: '🫠' } });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1/cards/card1/stickers',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ sticker: '🫠' }) }),
+    );
+  });
+
+  it('returns an error when the card is not found', async () => {
+    fetchSpy.mockResolvedValueOnce(json(boardWithCard()));
+
+    const result = await client.callTool({ name: 'add_sticker', arguments: { boardId: 'b1', cardId: 'missing', sticker: '🫠' } });
+
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('remove_sticker', () => {
+  it('removes the first matching sticker by its index', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(json(boardWithCard({ stickers: ['👍', '🫠', '🫠'] })))
+      .mockResolvedValueOnce(json({ identifier: 'card1', stickers: ['👍', '🫠'] }));
+
+    await client.callTool({ name: 'remove_sticker', arguments: { boardId: 'b1', cardId: 'card1', sticker: '🫠' } });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards/b1/columns/c1/cards/card1/stickers/1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('returns an error when the card does not have the sticker', async () => {
+    fetchSpy.mockResolvedValueOnce(json(boardWithCard({ stickers: ['👍'] })));
+
+    const result = await client.callTool({ name: 'remove_sticker', arguments: { boardId: 'b1', cardId: 'card1', sticker: '🫠' } });
+
+    expect(result.isError).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns an error without calling the API when the card has no stickers', async () => {
+    fetchSpy.mockResolvedValueOnce(json(boardWithCard()));
+
+    const result = await client.callTool({ name: 'remove_sticker', arguments: { boardId: 'b1', cardId: 'card1', sticker: '👍' } });
+
+    expect(result.isError).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns an error when the card is not found', async () => {
+    fetchSpy.mockResolvedValueOnce(json(boardWithCard()));
+
+    const result = await client.callTool({ name: 'remove_sticker', arguments: { boardId: 'b1', cardId: 'missing', sticker: '👍' } });
+
+    expect(result.isError).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('get_attachment', () => {
+  it('reports the server error when the attachment is not found', async () => {
+    fetchSpy.mockResolvedValue(json({ error: 'Attachment not found' }, 404));
+
+    const result = await client.callTool({ name: 'get_attachment', arguments: { boardId: 'b1', cardId: 'card1', fileId: 'missing' } });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as Array<{ type: string; text: string }>;
+    expect(content[0].text).toContain('Attachment not found');
+  });
+
+  const file = (body: string | Uint8Array, contentType: string) =>
+    new Response(body, { status: 200, headers: { 'Content-Type': contentType } });
+
+  it('returns an image so the agent can see it', async () => {
+    fetchSpy.mockResolvedValue(file(new Uint8Array([1, 2, 3]), 'image/png'));
+
+    const result = await client.callTool({ name: 'get_attachment', arguments: { boardId: 'b1', cardId: 'card1', fileId: 'f1' } });
+
+    expect(fetchSpy).toHaveBeenCalledWith('https://standup.test/api/boards/b1/cards/card1/attachments/f1', expect.anything());
+    expect(result.content).toEqual([{ type: 'image', data: 'AQID', mimeType: 'image/png' }]);
+  });
+
+  it('returns a text file as text', async () => {
+    fetchSpy.mockResolvedValue(file('line one', 'text/plain; charset=utf-8'));
+
+    const result = await client.callTool({ name: 'get_attachment', arguments: { boardId: 'b1', cardId: 'card1', fileId: 'f1' } });
+
+    expect(result.content).toEqual([{ type: 'text', text: 'line one' }]);
+  });
+
+  it('returns any other file as an embedded resource', async () => {
+    fetchSpy.mockResolvedValue(file(new Uint8Array([1, 2, 3]), 'application/pdf'));
+
+    const result = await client.callTool({ name: 'get_attachment', arguments: { boardId: 'b1', cardId: 'card1', fileId: 'f1' } });
+
+    expect(result.content).toEqual([{
+      type: 'resource',
+      resource: { uri: 'standup://boards/b1/cards/card1/attachments/f1', mimeType: 'application/pdf', blob: 'AQID' },
+    }]);
   });
 });
