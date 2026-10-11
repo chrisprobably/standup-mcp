@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { firstLineOfCardText } from './cardText.js';
+import { firstLineOfCardText, plainCardText } from './cardText.js';
 
 const editorJs = (...blocks: unknown[]) => JSON.stringify({ time: 1, blocks });
 const paragraph = (text: unknown) => ({ type: 'paragraph', data: { text } });
@@ -49,5 +49,21 @@ describe('firstLineOfCardText', () => {
     const checklist = { type: 'checklist', data: { items: [{ text: 'Write tests', checked: false }, { text: 'Ship' }] } };
 
     expect(firstLineOfCardText(editorJs(checklist, paragraph('Later')))).toBe('Write tests');
+  });
+});
+
+describe('plainCardText', () => {
+  it('skips null blocks instead of falling back to the raw JSON', () => {
+    expect(plainCardText(editorJs(null, paragraph('Bump the version')))).toBe('Bump the version');
+  });
+
+  it('skips blocks whose text is not a string', () => {
+    expect(plainCardText(editorJs(paragraph(5), paragraph('Bump the version')))).toBe('Bump the version');
+  });
+
+  it('includes the first item of a list block', () => {
+    const list = { type: 'list', data: { style: 'unordered', items: ['Bump <b>the</b> version', 'Tag it'] } };
+
+    expect(plainCardText(editorJs(paragraph('Release:'), list))).toBe('Release: Bump the version');
   });
 });
