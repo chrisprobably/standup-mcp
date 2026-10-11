@@ -7,16 +7,33 @@ const HTML_ENTITIES: Record<string, string> = {
   '&#39;': "'",
 };
 
-function editorJsBlockTexts(text: string): string[] | null {
+type EditorJsBlock = { data?: { text?: unknown; items?: unknown } } | null;
+
+function editorJsBlocks(text: string): EditorJsBlock[] | null {
   try {
     const parsed = JSON.parse(text);
-    if (Array.isArray(parsed?.blocks)) {
-      return parsed.blocks.map((block: { data?: { text?: string } }) => block.data?.text ?? '');
-    }
+    return Array.isArray(parsed?.blocks) ? parsed.blocks : null;
   } catch {
-    // plain text or markdown card
+    return null;
   }
-  return null;
+}
+
+function listItemText(item: unknown): string | null {
+  if (typeof item === 'string') return item;
+  if (typeof item !== 'object' || item === null) return null;
+  const { content, text } = item as { content?: unknown; text?: unknown };
+  if (typeof content === 'string') return content;
+  return typeof text === 'string' ? text : null;
+}
+
+function blockText(block: EditorJsBlock): string | null {
+  const data = block?.data;
+  if (typeof data?.text === 'string') return data.text;
+  return Array.isArray(data?.items) ? listItemText(data.items[0]) : null;
+}
+
+function blockTexts(blocks: EditorJsBlock[]): string[] {
+  return blocks.map(blockText).filter((text): text is string => text !== null);
 }
 
 function htmlToText(html: string): string {
@@ -26,12 +43,17 @@ function htmlToText(html: string): string {
     .replace(/&(nbsp|amp|lt|gt|quot|#39);/g, (entity) => HTML_ENTITIES[entity]);
 }
 
+function firstNonEmptyLine(texts: string[]): string {
+  const lines = texts.flatMap((text) => text.split('\n')).map((line) => line.trim());
+  return lines.find((line) => line.length > 0) ?? '';
+}
+
 export function plainCardText(text: string): string {
-  const blocks = editorJsBlockTexts(text);
-  return blocks ? blocks.join(' ').replace(/<[^>]+>/g, '') : text;
+  const blocks = editorJsBlocks(text);
+  return blocks ? blockTexts(blocks).join(' ').replace(/<[^>]+>/g, '') : text;
 }
 
 export function firstLineOfCardText(text: string): string {
-  const lines = (editorJsBlockTexts(text) ?? [text]).flatMap((block) => htmlToText(block).split('\n'));
-  return lines.map((line) => line.trim()).find((line) => line.length > 0) ?? '';
+  const blocks = editorJsBlocks(text);
+  return blocks ? firstNonEmptyLine(blockTexts(blocks).map(htmlToText)) : firstNonEmptyLine([text]);
 }

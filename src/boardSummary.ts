@@ -14,7 +14,7 @@ export interface CardSummary {
   firstLine: string;
   assignees: string[];
   stickers: string[];
-  work: Omit<CardWork, 'repositoryPath'> | null;
+  work: CardWork | null;
   commentCount: number;
   lastComment: LastCommentSummary | null;
 }
@@ -34,12 +34,6 @@ export interface BoardSummary {
   cards: CardSummary[];
 }
 
-function summarizeWork(work: CardWork | undefined): CardSummary['work'] {
-  if (!work) return null;
-  const { branch, commits, pushed, pullRequestUrl } = work;
-  return pullRequestUrl ? { branch, commits, pushed, pullRequestUrl } : { branch, commits, pushed };
-}
-
 function summarizeLastComment(card: Card): LastCommentSummary | null {
   const last = card.comments?.at(-1);
   if (!last) return null;
@@ -54,7 +48,7 @@ function summarizeCard(card: Card, columnId: string, position: number): CardSumm
     firstLine: firstLineOfCardText(card.text ?? ''),
     assignees: card.assignees ?? [],
     stickers: card.stickers ?? [],
-    work: summarizeWork(card.work),
+    work: card.work ?? null,
     commentCount: card.comments?.length ?? 0,
     lastComment: summarizeLastComment(card),
   };

@@ -87,7 +87,7 @@ describe('summarizeBoard', () => {
     expect(card.stickers).toEqual(['🚀']);
   });
 
-  it('keeps the branch, commits, pushed flag and pull request link of the work', () => {
+  it('keeps the work as recorded, including the repository path', () => {
     const card = onlyCard({
       identifier: 'k1',
       text: 'T',
@@ -104,6 +104,7 @@ describe('summarizeBoard', () => {
       branch: 'feat/x',
       commits: ['abc'],
       pushed: true,
+      repositoryPath: '/repo',
       pullRequestUrl: 'https://github.com/o/r/pull/1',
     });
   });
