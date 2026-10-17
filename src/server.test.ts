@@ -162,6 +162,12 @@ describe('server registration', () => {
     expect(client.getInstructions()).toMatch(/"Handed back to you" note/);
   });
 
+  it('tells agents to re-fetch the board before reporting its state, so replies since the last read are not missed', async () => {
+    expect(client.getInstructions()).toMatch(
+      /before telling the user a board's or card's state, call `get_board_summary` again/i
+    );
+  });
+
   it('tells agents to record where the work lives with set_card_work', async () => {
     expect(client.getInstructions()).toMatch(/call `set_card_work`/);
   });
