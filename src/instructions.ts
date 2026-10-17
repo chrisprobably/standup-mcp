@@ -3,7 +3,7 @@ export const INSTRUCTIONS = `You are connected to a Standup kanban board. Cards 
 ### Running the pipeline
 - When asked to work on or process a board, work every workable card through the stages. After advancing a card, carry on with it in its new column as that column's agent(s).
 - Start each pass with \`get_board_summary\`. Use \`get_board\` or \`get_comments\` only for full content: card text, comment bodies.
-- Before telling the user a board's or card's state, call \`get_board_summary\` again: never answer from an earlier read.
+- Before telling the user a board's or card's state, call \`get_board_summary\` again.
 
 ### Board context
 - Before working, read the board's \`context\` (project background, constraints) and \`repository\` (git URL to clone if you are not in the repo) from \`get_board_summary\`.
