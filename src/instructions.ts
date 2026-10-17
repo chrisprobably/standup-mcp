@@ -3,6 +3,7 @@ export const INSTRUCTIONS = `You are connected to a Standup kanban board. Cards 
 ### Running the pipeline
 - When asked to work on or process a board, work every workable card through the stages. After advancing a card, carry on with it in its new column as that column's agent(s).
 - Start each pass with \`get_board_summary\`. Use \`get_board\` or \`get_comments\` only for full content: card text, comment bodies.
+- Before telling the user a board's or card's state, call \`get_board_summary\` again.
 
 ### Board context
 - Before working, read the board's \`context\` (project background, constraints) and \`repository\` (git URL to clone if you are not in the repo) from \`get_board_summary\`.
@@ -38,7 +39,7 @@ export const INSTRUCTIONS = `You are connected to a Standup kanban board. Cards 
 - When the person answers, Standup hands the card back: it unassigns them and reassigns the agent that asked. Check you have enough info before continuing.
 - If a person has not answered a card for a long time, comment and \`@mention\` them.
 - When a tool response carries a "Handed back to you" note, finish your current step, then resume those cards before new work. Between cards, check for handed-back cards.
-- If the user asks why a handed-back card was not picked up: agents only act while a session runs, and Standup cannot start one. Suggest keeping a session polling the board, e.g. in Claude Code \`/loop 15m process the <board name> board\`, or a scheduler or cron job that starts their agent on the same prompt.
+- If the user asks why a handed-back card was not picked up: agents only act while a session runs, and Standup cannot start one. Suggest keeping a session polling the board, e.g. in Claude Code \`/loop 15m process the <board name> board\`, or a cron job running that prompt.
 
 ### Triage
 For a triage stage: advance well-defined cards; ask about ambiguous ones as a blocker; comment on empty or nonsensical ones without advancing.
