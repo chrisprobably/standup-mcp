@@ -5,6 +5,7 @@ import { createServer } from './server.js';
 
 const EXPECTED_TOOLS = [
   'list_boards',
+  'create_board',
   'get_board',
   'get_board_summary',
   'create_card',
@@ -1000,5 +1001,33 @@ describe('get_attachment', () => {
       type: 'resource',
       resource: { uri: 'standup://boards/b1/cards/card1/attachments/f1', mimeType: 'application/pdf', blob: 'AQID' },
     }]);
+  });
+});
+
+describe('create_board', () => {
+  it('creates the board from the template and returns it', async () => {
+    fetchSpy.mockResolvedValue(json({ identifier: 'b9', name: 'Game', columns: [] }, 201));
+
+    const result = await client.callTool({
+      name: 'create_board',
+      arguments: { name: 'Game', template: 'ai-software-development', context: 'Branch per card', repository: 'https://github.com/example/game' },
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ name: 'Game', template: 'ai-software-development', context: 'Branch per card', repository: 'https://github.com/example/game' }),
+      }),
+    );
+    const content = result.content as Array<{ type: string; text: string }>;
+    expect(JSON.parse(content[0].text).identifier).toBe('b9');
+  });
+
+  it('rejects a template the API does not offer', async () => {
+    const result = await client.callTool({ name: 'create_board', arguments: { name: 'Game', template: 'kanban' } });
+
+    expect(result.isError).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

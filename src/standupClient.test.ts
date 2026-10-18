@@ -147,6 +147,26 @@ describe('findCard', () => {
   });
 });
 
+describe('createBoard', () => {
+  it('calls POST /api/boards with the name and template', async () => {
+    fetchSpy.mockResolvedValue(ok({ identifier: 'b9' }, 201));
+    await client.createBoard({ name: 'Game', template: 'blank' });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://standup.test/api/boards',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Game', template: 'blank' }) }),
+    );
+  });
+
+  it('leaves out settings that are not given', async () => {
+    fetchSpy.mockResolvedValue(ok({ identifier: 'b9' }, 201));
+    await client.createBoard({ name: 'Game' });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ body: JSON.stringify({ name: 'Game' }) }),
+    );
+  });
+});
+
 describe('addColumn', () => {
   it('calls POST with the name and index', async () => {
     fetchSpy.mockResolvedValue(ok({ identifier: 'c9' }, 201));

@@ -1,5 +1,14 @@
 type FetchFn = typeof globalThis.fetch;
 
+export const BOARD_TEMPLATES = ['blank', 'ai-software-development'] as const;
+
+export interface NewBoard {
+  name: string;
+  template?: (typeof BOARD_TEMPLATES)[number];
+  context?: string;
+  repository?: string;
+}
+
 export interface StandupClientConfig {
   baseUrl: string;
   apiKey: string;
@@ -42,6 +51,13 @@ export class StandupClient {
 
   async listBoards(): Promise<unknown> {
     return this.request('/api/boards');
+  }
+
+  async createBoard(board: NewBoard): Promise<Board> {
+    return this.request('/api/boards', {
+      method: 'POST',
+      body: JSON.stringify(board),
+    }) as Promise<Board>;
   }
 
   async getBoard(boardId: string): Promise<Board> {
