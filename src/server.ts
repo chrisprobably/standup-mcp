@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { StandupClient } from './standupClient.js';
+import { BOARD_TEMPLATES, StandupClient } from './standupClient.js';
 import { INSTRUCTIONS } from './instructions.js';
 import { HandedBackTracker } from './handedBackTracker.js';
 import { mergeCardWork } from './mergeCardWork.js';
@@ -52,6 +52,18 @@ export function createServer(config: ServerConfig): McpServer {
     inputSchema: z.object({}),
   }, async () => {
     return jsonResult(await client.listBoards());
+  });
+
+  server.registerTool('create_board', {
+    description: 'Create a board you own from a template: blank (Todo, In Progress, Done) or ai-software-development (Inbox, Triage, In Progress, Code Review, Testing, Done, with the default agents). Returns the new board with its column and agent identifiers.',
+    inputSchema: z.object({
+      name: z.string().describe('The board name'),
+      template: z.enum(BOARD_TEMPLATES).optional().describe('The layout to start from. Defaults to blank.'),
+      context: z.string().optional().describe('Board context: project background and constraints for agents'),
+      repository: z.string().optional().describe('Git URL of the repository the board works on'),
+    }),
+  }, async (board) => {
+    return jsonResult(await client.createBoard(board));
   });
 
   server.registerTool('get_board', {
