@@ -49,7 +49,7 @@ function summarizeCard(card: Card, columnId: string, position: number): CardSumm
     assignees: card.assignees ?? [],
     stickers: card.stickers ?? [],
     work: card.work ?? null,
-    commentCount: card.comments?.length ?? 0,
+    commentCount: card.comments?.filter((comment) => !comment.deletedAt).length ?? 0,
     lastComment: summarizeLastComment(card),
   };
 }

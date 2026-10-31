@@ -178,6 +178,31 @@ describe('summarizeBoard', () => {
     expect(JSON.stringify(card)).not.toMatch(/Please start|Done it/);
   });
 
+  it('leaves deleted comments out of the comment count', () => {
+    const card = onlyCard({
+      identifier: 'k1',
+      text: 'T',
+      comments: [
+        { identifier: 'm1', author: 'chris', text: '', createdAt: '2026-10-11T08:00:00Z', deletedAt: '2026-10-11T08:30:00Z' },
+        { identifier: 'm2', author: 'chris', text: 'Kept', createdAt: '2026-10-11T09:00:00Z' },
+      ],
+    });
+
+    expect(card.commentCount).toBe(1);
+  });
+
+  it('still describes a deleted last comment, so its time is not lost', () => {
+    const card = onlyCard({
+      identifier: 'k1',
+      text: 'T',
+      comments: [
+        { identifier: 'm1', author: 'chris', text: '', createdAt: '2026-10-11T08:00:00Z', deletedAt: '2026-10-11T08:30:00Z' },
+      ],
+    });
+
+    expect(card.lastComment).toEqual({ author: 'chris', agentId: null, createdAt: '2026-10-11T08:00:00Z' });
+  });
+
   it('marks a last comment written by a person with no agentId', () => {
     const card = onlyCard({
       identifier: 'k1',
