@@ -174,7 +174,7 @@ export function createServer(config: ServerConfig): McpServer {
   });
 
   server.registerTool('get_comments', {
-    description: 'Get all comments on a card',
+    description: 'Get all comments on a card. A deleted comment keeps its place, author and time, with empty text and a deletedAt time.',
     inputSchema: z.object({
       boardId: z.string().describe('The board identifier'),
       cardId: z.string().describe('The card identifier'),

@@ -218,6 +218,7 @@ export interface CardComment {
   text: string;
   agentId?: string;
   createdAt?: string;
+  deletedAt?: string;
 }
 
 export interface CardWork {
