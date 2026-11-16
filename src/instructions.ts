@@ -33,6 +33,7 @@ export const INSTRUCTIONS = `You are connected to a Standup kanban board. Cards 
 
 ### Blockers
 - Comment with your \`agentId\`, \`options\` for clickable choices and an \`@mention\` of the user's Standup username (the API lists valid ones). Assign the user, unassign yourself, and leave the card in its column.
+- Ask only on cards, never in the chat: a question there stops the board being processed.
 
 ### Waiting on people
 - Never work on a card assigned to a person.
